@@ -15,35 +15,28 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
       display: flex;
       flex-direction: column;
-      align-items: center;
       justify-content: center;
-      padding: 6vh 5vw;
-      gap: 3rem;
+      padding: 8vh 8vw;
+      gap: 2.5rem;
     }
-    header { text-align: center; }
-    h1 { font-size: clamp(2rem, 6vw, 3.5rem); margin: 0 0 .4rem; letter-spacing: -0.02em; }
-    header p { margin: 0; opacity: .55; font-size: .95rem; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1.25rem;
-      width: 100%;
-      max-width: 920px;
-    }
-    a.card {
-      display: block;
+    header h1 { font-size: clamp(2rem, 6vw, 3.25rem); margin: 0 0 .35rem; letter-spacing: -0.02em; }
+    header p { margin: 0; opacity: .5; font-size: .95rem; }
+    ul { list-style: none; margin: 0; padding: 0; max-width: 640px; }
+    li { border-top: 1px solid #222; }
+    li:last-child { border-bottom: 1px solid #222; }
+    a {
+      display: flex;
+      align-items: baseline;
+      gap: 1rem;
       text-decoration: none;
       color: inherit;
-      border: 1px solid #222;
-      border-radius: 14px;
-      padding: 1.5rem 1.5rem 1.6rem;
-      background: #0a0a0a;
-      transition: border-color .18s ease, transform .18s ease, background .18s ease;
+      padding: 1.15rem 0.25rem;
+      transition: padding-left .15s ease;
     }
-    a.card:hover { border-color: #fff; transform: translateY(-3px); background: #111; }
-    .card .dots { font-size: 1.4rem; letter-spacing: .15em; margin-bottom: .9rem; }
-    .card h2 { font-size: 1.15rem; margin: 0 0 .4rem; }
-    .card p { margin: 0; opacity: .6; font-size: .88rem; line-height: 1.45; }
+    a:hover { padding-left: 1rem; }
+    a .name { font-size: 1.2rem; }
+    a .desc { opacity: .5; font-size: .9rem; }
+    a .arrow { margin-left: auto; opacity: .4; }
     footer { opacity: .35; font-size: .8rem; }
   </style>
 </head>
@@ -53,23 +46,29 @@
     <p>Halftone typography — three variants</p>
   </header>
 
-  <nav class="grid">
-    <a class="card" href="particle-repulsion/">
-      <div class="dots">● ● ●</div>
-      <h2>Particle Repulsion</h2>
-      <p>Even halftone grid with neighbor-repulsion physics so dots never overlap. Custom GT-Haptik typeface.</p>
-    </a>
-    <a class="card" href="sparse-trails/">
-      <div class="dots">●  ·  ˙</div>
-      <h2>Sparse Trails</h2>
-      <p>13 quantized dot sizes; bright cores dissolve into trailing dots that fade out into black space.</p>
-    </a>
-    <a class="card" href="jovial-tharp/">
-      <div class="dots">●●●●●</div>
-      <h2>Distance Field</h2>
-      <p>High-resolution distance field with a wider size ratio and wave physics — dense field, dramatic bloom.</p>
-    </a>
-  </nav>
+  <ul>
+    <li>
+      <a href="particle-repulsion/">
+        <span class="name">Particle Repulsion</span>
+        <span class="desc">neighbor-repulsion grid · GT-Haptik</span>
+        <span class="arrow">→</span>
+      </a>
+    </li>
+    <li>
+      <a href="sparse-trails/">
+        <span class="name">Sparse Trails</span>
+        <span class="desc">quantized sizes · trailing dots</span>
+        <span class="arrow">→</span>
+      </a>
+    </li>
+    <li>
+      <a href="jovial-tharp/">
+        <span class="name">Distance Field</span>
+        <span class="desc">high-res field · wave physics</span>
+        <span class="arrow">→</span>
+      </a>
+    </li>
+  </ul>
 
   <footer>Type a word in any experiment to reshape it.</footer>
 </body>
