@@ -6,7 +6,7 @@
 
 body {
   overflow: hidden;
-  background: #0a0a0a;
+  background: #f5f0e8;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
@@ -21,10 +21,10 @@ canvas {
   transform: translateX(-50%);
   width: 180px;
   padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 8px;
-  color: #fafafa;
+  color: #1a1a1a;
   font-size: 14px;
   font-family: inherit;
   letter-spacing: 0.08em;
@@ -36,12 +36,12 @@ canvas {
 }
 
 #text-input:focus {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 #text-input::placeholder {
-  color: rgba(255, 255, 255, 0.2);
+  color: rgba(0, 0, 0, 0.25);
   text-transform: none;
   letter-spacing: 0.02em;
 }
@@ -50,7 +50,7 @@ canvas {
   position: fixed;
   bottom: 28px;
   right: 24px;
-  color: rgba(255, 255, 255, 0.2);
+  color: rgba(0, 0, 0, 0.3);
   font-size: 12px;
   font-family: inherit;
   text-decoration: none;
@@ -60,5 +60,5 @@ canvas {
 }
 
 .nav-link:hover {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(0, 0, 0, 0.6);
 }

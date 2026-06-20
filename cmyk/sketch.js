@@ -9,8 +9,21 @@ const MOUSE_ATTRACT_STRENGTH = 0.07;
 const MOUSE_SCALE_MAX = 2.2;
 const RADIUS_EASE_IN = 0.12;
 const RADIUS_EASE_OUT = 0.06;
-const BG_COLOR = '#0a0a0a';
-const DOT_COLOR = [250, 250, 250]; // #fafafa
+const BG_COLOR = '#f5f0e8';
+const CMYK_OFFSET_DIST = 0.35;
+const CMYK_DOT_SCALE = 0.75;
+const CMYK_ALPHA = 180;
+
+const CMYK_CHANNELS = [
+  { color: [0, 255, 255],   angle: 15 * Math.PI / 180,  cos: 0, sin: 0 },  // Cyan
+  { color: [255, 0, 255],   angle: 75 * Math.PI / 180,  cos: 0, sin: 0 },  // Magenta
+  { color: [255, 255, 0],   angle: 0,                   cos: 0, sin: 0 },  // Yellow
+  { color: [0, 0, 0],       angle: 45 * Math.PI / 180,  cos: 0, sin: 0 },  // Key (Black)
+];
+for (let i = 0; i < CMYK_CHANNELS.length; i++) {
+  CMYK_CHANNELS[i].cos = Math.cos(CMYK_CHANNELS[i].angle);
+  CMYK_CHANNELS[i].sin = Math.sin(CMYK_CHANNELS[i].angle);
+}
 
 // ─── State ───────────────────────────────────────────────────
 let particles = [];
@@ -41,7 +54,7 @@ function draw() {
   }
 
   background(BG_COLOR);
-  fill(DOT_COLOR[0], DOT_COLOR[1], DOT_COLOR[2]);
+  blendMode(MULTIPLY);
 
   const mx = mouseX;
   const my = mouseY;
@@ -76,7 +89,6 @@ function draw() {
     const neighbors = p.neighbors;
     for (let j = 0; j < neighbors.length; j++) {
       const n = particles[neighbors[j]];
-      // Nudge toward neighbor's displacement from rest
       p.vx += (n.x - n.targetX) * COUPLING;
       p.vy += (n.y - n.targetY) * COUPLING;
     }
@@ -94,11 +106,21 @@ function draw() {
     // ── 5. Animate radius toward base (for text transitions) ──
     p.targetR = lerp(p.targetR, p.baseR, 0.08);
 
-    // ── 6. Draw ──
+    // ── 6. Draw CMYK cluster ──
     if (p.r > 0.3) {
-      circle(p.x, p.y, p.r * 2);
+      const offsetR = p.r * CMYK_OFFSET_DIST;
+      for (let ch = 0; ch < CMYK_CHANNELS.length; ch++) {
+        const chan = CMYK_CHANNELS[ch];
+        const dotR = p.r * CMYK_DOT_SCALE * p.cmyk[ch];
+        if (dotR > 0.2) {
+          fill(chan.color[0], chan.color[1], chan.color[2], CMYK_ALPHA);
+          circle(p.x + chan.cos * offsetR, p.y + chan.sin * offsetR, dotR * 2);
+        }
+      }
     }
   }
+
+  blendMode(BLEND);
 
   // Clean up dead particles (baseR shrunk to 0 and fully faded)
   if (particles.some(p => p.baseR === 0 && p.r < 0.3)) {
@@ -127,17 +149,15 @@ function renderTextToBuffer() {
   if (pg) pg.remove();
 
   pg = createGraphics(width, height);
-  pg.pixelDensity(1); // Critical for Retina displays
+  pg.pixelDensity(1);
   pg.background(0);
   pg.fill(255);
   pg.noStroke();
   pg.textAlign(CENTER, CENTER);
   pg.textStyle(BOLD);
 
-  // Try bold system fonts in order of preference
   pg.textFont('Arial Black');
 
-  // Auto-size: fit text to ~75% of canvas width
   let fontSize = (width * 0.75) / max(currentText.length, 1) * 1.6;
   fontSize = min(fontSize, height * 0.55);
   pg.textSize(fontSize);
@@ -152,7 +172,6 @@ function rebuildGrid() {
   const oldParticles = particles;
   const oldLookup = gridLookup;
 
-  // Calculate grid dimensions
   spacing = floor(width / COL_COUNT);
   if (spacing < 4) spacing = 4;
   cols = floor(width / spacing);
@@ -160,25 +179,22 @@ function rebuildGrid() {
   offsetX = (width - cols * spacing) / 2 + spacing / 2;
   offsetY = (height - rows * spacing) / 2 + spacing / 2;
 
-  // Build new particles from buffer sampling
   const newParticles = [];
   const newLookup = [];
 
   for (let c = 0; c < cols; c++) {
     newLookup[c] = [];
     for (let r = 0; r < rows; r++) {
-      // Map grid position to pixel in offscreen buffer
       const px = floor(map(c, 0, cols - 1, 0, pg.width - 1));
       const py = floor(map(r, 0, rows - 1, 0, pg.height - 1));
       const idx = (py * pg.width + px) * 4;
-      const brightness = pg.pixels[idx]; // Red channel
+      const brightness = pg.pixels[idx];
 
       if (brightness > BRIGHTNESS_THRESHOLD) {
         const tx = offsetX + c * spacing;
         const ty = offsetY + r * spacing;
         const baseR = map(brightness, BRIGHTNESS_THRESHOLD, 255, 0.5, spacing * 0.42);
 
-        // Try to find an existing particle at this grid position for smooth transition
         let existingP = null;
         if (oldLookup[c] !== undefined && oldLookup[c][r] !== undefined) {
           existingP = oldParticles[oldLookup[c][r]];
@@ -191,10 +207,11 @@ function rebuildGrid() {
           vy: existingP ? existingP.vy : 0,
           targetX: tx,
           targetY: ty,
-          r: existingP ? existingP.r : 0, // Start at 0 for entrance animation
-          targetR: existingP ? existingP.targetR : 0, // Will animate toward baseR
+          r: existingP ? existingP.r : 0,
+          targetR: existingP ? existingP.targetR : 0,
           baseR: baseR,
-          neighbors: [], // Populated below
+          cmyk: [1.0, 1.0, 1.0, 1.0],
+          neighbors: [],
           col: c,
           row: r
         };
@@ -205,13 +222,11 @@ function rebuildGrid() {
     }
   }
 
-  // Build neighbor references
   for (let i = 0; i < newParticles.length; i++) {
     const p = newParticles[i];
     const c = p.col;
     const r = p.row;
 
-    // Check 4 cardinal neighbors
     if (c > 0 && newLookup[c - 1] && newLookup[c - 1][r] !== undefined) {
       p.neighbors.push(newLookup[c - 1][r]);
     }
@@ -226,16 +241,15 @@ function rebuildGrid() {
     }
   }
 
-  // Mark old particles that no longer exist for fade-out
   for (let i = 0; i < oldParticles.length; i++) {
     const op = oldParticles[i];
     const c = op.col;
     const r = op.row;
 
     if (newLookup[c] === undefined || newLookup[c][r] === undefined) {
-      // This particle is no longer in the new text — shrink it out
       op.baseR = 0;
       op.neighbors = [];
+      if (!op.cmyk) op.cmyk = [1.0, 1.0, 1.0, 1.0];
       newParticles.push(op);
     }
   }
