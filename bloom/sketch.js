@@ -64,6 +64,16 @@ function setup() {
   pixelDensity(1);
   noStroke();
   buildControls();
+  window.addEventListener('keydown', onKey);
+}
+
+function onKey(e) {
+  if ((e.key === 'h' || e.key === 'H') && e.ctrlKey) {
+    e.preventDefault();
+    document.getElementById('panel').classList.toggle('hidden');
+    const hint = document.getElementById('key-hint');
+    if (hint) hint.style.display = 'none';
+  }
 }
 
 function draw() {
@@ -91,13 +101,6 @@ function windowResized() {
   needsRebuild = true;
 }
 
-function keyPressed() {
-  if (key === 'h' || key === 'H') {
-    document.getElementById('panel').classList.toggle('hidden');
-    const hint = document.getElementById('key-hint');
-    if (hint) hint.style.display = 'none';   // once they know the key, drop the hint
-  }
-}
 
 // ─── Halftone dots ───────────────────────────────────────────
 

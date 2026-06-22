@@ -71,6 +71,17 @@ function setup() {
   inputEl.addEventListener('input', onTextChange);
 
   buildControls();
+  window.addEventListener('keydown', onKey);
+}
+
+function onKey(e) {
+  // Ctrl+H toggles the dials — a combo, so plain typing in the word field is untouched
+  if ((e.key === 'h' || e.key === 'H') && e.ctrlKey) {
+    e.preventDefault();
+    document.getElementById('panel').classList.toggle('hidden');
+    const hint = document.getElementById('key-hint');
+    if (hint) hint.style.display = 'none';
+  }
 }
 
 function draw() {

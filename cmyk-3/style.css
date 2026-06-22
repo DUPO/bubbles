@@ -82,6 +82,31 @@ canvas { display: block; }
 
 #panel.collapsed #panel-body { display: none; }
 #panel.collapsed #panel-head { border-bottom: none; }
+#panel.hidden { display: none; }
+
+/* Subtle "press Ctrl+H" hint — fades out shortly after load */
+#key-hint {
+  position: fixed;
+  bottom: 16px;
+  right: 18px;
+  z-index: 20;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: rgba(245, 240, 232, 0.45);
+  background: rgba(20, 20, 20, 0.5);
+  padding: 5px 10px;
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  animation: hintFade 1s ease 5s forwards;
+}
+
+#key-hint b { font-weight: 700; color: rgba(245, 240, 232, 0.8); }
+
+@keyframes hintFade {
+  to { opacity: 0; }
+}
 
 #panel-body {
   padding: 12px 14px 14px;
