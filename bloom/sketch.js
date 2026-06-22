@@ -91,6 +91,14 @@ function windowResized() {
   needsRebuild = true;
 }
 
+function keyPressed() {
+  if (key === 'h' || key === 'H') {
+    document.getElementById('panel').classList.toggle('hidden');
+    const hint = document.getElementById('key-hint');
+    if (hint) hint.style.display = 'none';   // once they know the key, drop the hint
+  }
+}
+
 // ─── Halftone dots ───────────────────────────────────────────
 
 function drawDots(mx, my, mrSq, mvx, mvy) {
