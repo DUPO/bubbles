@@ -1,22 +1,44 @@
-// ─── Configuration ───────────────────────────────────────────
-const BG_COLOR = '#000000';
+// ─── Tunable parameters (exposed as on-page dials) ───────────
+const P = {
+  MOUSE_RADIUS: 140,
+  VORTEX_STRENGTH: 0.70,
+  VORTEX_INWARD: 0.005,
+  MOUSE_DRAG: 0.18,
+  FIELD_SCALE_MAX: 4.40,
+  MOTION_COUPLING: 0.24,
+  COLOR_BLEED: 0.60,
+  COLOR_RECOVER: 0.235,
+  ACTIVITY_SCALE: 3.0,
+  FIELD_ALPHA: 225,
+  FIELD_JITTER: 2.10,
+  FIELD_JITTER_MAX: 4.0,
+  FIELD_COL_COUNT: 80,
+};
 
-// Field (background) dots — small, single-channel, jittery
-const FIELD_COL_COUNT = 84;       // density of the small-dot grid
+// Dial definitions → generate the on-page sliders. `rebuild: true` means
+// changing it re-lays-out the field (grid density), so we flag a rebuild.
+const CONTROLS = [
+  { key: 'MOUSE_RADIUS',    label: 'Vortex radius',   min: 40,    max: 400, step: 5 },
+  { key: 'VORTEX_STRENGTH', label: 'Vortex strength', min: 0,     max: 8,   step: 0.1 },
+  { key: 'VORTEX_INWARD',   label: 'Inward pull',     min: 0,     max: 0.15, step: 0.005 },
+  { key: 'MOUSE_DRAG',      label: 'Mouse drag (speed)', min: 0,  max: 1,   step: 0.02 },
+  { key: 'FIELD_SCALE_MAX', label: 'Dot swell',       min: 1,     max: 8,   step: 0.1 },
+  { key: 'MOTION_COUPLING', label: 'Motion coupling', min: 0,     max: 0.3, step: 0.01 },
+  { key: 'COLOR_BLEED',     label: 'Color bleed',     min: 0,     max: 0.6, step: 0.01 },
+  { key: 'COLOR_RECOVER',   label: 'Color recover',   min: 0.005, max: 0.3, step: 0.005 },
+  { key: 'ACTIVITY_SCALE',  label: 'Activity thresh', min: 0.5,   max: 8,   step: 0.1 },
+  { key: 'FIELD_ALPHA',     label: 'Dot opacity',     min: 30,    max: 255, step: 5 },
+  { key: 'FIELD_JITTER',    label: 'Jitter (base)',   min: 0,     max: 4,   step: 0.1 },
+  { key: 'FIELD_JITTER_MAX', label: 'Jitter (near cursor)', min: 0, max: 10, step: 0.1 },
+  { key: 'FIELD_COL_COUNT', label: 'Field density',   min: 30,    max: 140, step: 2, rebuild: true },
+];
+
+// ─── Fixed configuration ─────────────────────────────────────
+const BG_COLOR = '#000000';
 const FIELD_DOT_MIN = 1.2;        // px radius at grid rest
 const FIELD_DOT_MAX = 2.8;        // px radius variation
-const FIELD_JITTER = 1.3;         // constant micro-vibrato (px)
 const FIELD_SPRING = 0.05;        // pull back to home cell
 const FIELD_DAMPING = 0.85;
-const FIELD_ALPHA = 165;          // moderate so overlaps build new hues
-const FIELD_SCALE_MAX = 2.6;      // radius growth under cursor
-
-// Mouse vortex — dots orbit the cursor on a tangential force
-const MOUSE_RADIUS = 190;
-const VORTEX_STRENGTH = 1.5;      // tangential push near the cursor (px/frame^2)
-const VORTEX_INWARD = 0.06;       // slight inward draw so dots gather into the swirl
-
-// Text mask — the letterforms cut a negative-space hole in the field
 const TEXT_BRIGHTNESS_THRESHOLD = 30;
 const RADIUS_EASE_IN = 0.12;
 const RADIUS_EASE_OUT = 0.06;
@@ -45,6 +67,8 @@ function setup() {
 
   inputEl = document.getElementById('text-input');
   inputEl.addEventListener('input', onTextChange);
+
+  buildControls();
 }
 
 function draw() {
@@ -59,9 +83,11 @@ function draw() {
 
   const mx = mouseX;
   const my = mouseY;
-  const mrSq = MOUSE_RADIUS * MOUSE_RADIUS;
+  const mvx = mouseX - pmouseX;   // cursor velocity this frame (px)
+  const mvy = mouseY - pmouseY;
+  const mrSq = P.MOUSE_RADIUS * P.MOUSE_RADIUS;
 
-  drawField(mx, my, mrSq);
+  drawField(mx, my, mrSq, mvx, mvy);
 
   blendMode(BLEND);
 }
@@ -73,13 +99,15 @@ function windowResized() {
 
 // ─── Field Layer ─────────────────────────────────────────────
 
-function drawField(mx, my, mrSq) {
+function drawField(mx, my, mrSq, mvx, mvy) {
   for (let i = 0; i < fieldParticles.length; i++) {
     const p = fieldParticles[i];
 
     const dx = mx - p.x;
     const dy = my - p.y;
     const distSq = dx * dx + dy * dy;
+
+    let jitter = P.FIELD_JITTER;   // ramps up with proximity below
 
     if (distSq < mrSq && distSq > 0.01) {
       // Vortex: spin around the cursor (tangential) + a touch inward, so
@@ -88,14 +116,47 @@ function drawField(mx, my, mrSq) {
       const inv = 1 / dist;
       const tx = -dy * inv;   // unit tangent (rotate cursor→dot vector 90° CCW)
       const ty = dx * inv;
-      const spin = map(dist, 0, MOUSE_RADIUS, VORTEX_STRENGTH, 0);
-      p.vx += tx * spin + dx * VORTEX_INWARD;
-      p.vy += ty * spin + dy * VORTEX_INWARD;
-      const scale = map(dist, 0, MOUSE_RADIUS, FIELD_SCALE_MAX, 1.0);
+      const proximity = map(dist, 0, P.MOUSE_RADIUS, 1, 0);   // 1 at cursor → 0 at edge
+      const spin = P.VORTEX_STRENGTH * proximity;
+      p.vx += tx * spin + dx * P.VORTEX_INWARD;
+      p.vy += ty * spin + dy * P.VORTEX_INWARD;
+      // Drag/wake: shove dots along the cursor's travel, scaled by speed & proximity
+      p.vx += mvx * P.MOUSE_DRAG * proximity;
+      p.vy += mvy * P.MOUSE_DRAG * proximity;
+      const scale = lerp(1.0, P.FIELD_SCALE_MAX, proximity);
       p.r = lerp(p.r, p.baseR * scale, RADIUS_EASE_IN);
+      // More vibrato the closer the dot is to the cursor
+      jitter = lerp(P.FIELD_JITTER, P.FIELD_JITTER_MAX, proximity);
     } else {
       p.r = lerp(p.r, p.baseR, RADIUS_EASE_OUT);
     }
+
+    // Neighbor coupling — one pass over grid neighbors for both motion & color
+    const nb = p.neighbors;
+    const n = nb.length;
+    if (n > 0) {
+      let avx = 0, avy = 0, ar = 0, ag = 0, ab = 0;
+      for (let j = 0; j < n; j++) {
+        const q = fieldParticles[nb[j]];
+        avx += q.vx; avy += q.vy;
+        ar += q.col[0]; ag += q.col[1]; ab += q.col[2];
+      }
+      const invN = 1 / n;
+      // Motion: drift toward neighbors' average velocity → disturbances propagate
+      p.vx += (avx * invN - p.vx) * P.MOTION_COUPLING;
+      p.vy += (avy * invN - p.vy) * P.MOTION_COUPLING;
+      // Color: bleed toward neighbors' average, but only as much as this dot is moving
+      const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+      const bleed = P.COLOR_BLEED * Math.min(1, speed / P.ACTIVITY_SCALE);
+      p.col[0] += (ar * invN - p.col[0]) * bleed;
+      p.col[1] += (ag * invN - p.col[1]) * bleed;
+      p.col[2] += (ab * invN - p.col[2]) * bleed;
+    }
+
+    // Relax color back toward the dot's base channel when things calm down
+    p.col[0] += (p.base[0] - p.col[0]) * P.COLOR_RECOVER;
+    p.col[1] += (p.base[1] - p.col[1]) * P.COLOR_RECOVER;
+    p.col[2] += (p.base[2] - p.col[2]) * P.COLOR_RECOVER;
 
     // Spring home + damping
     p.vx += (p.homeX - p.x) * FIELD_SPRING;
@@ -105,26 +166,27 @@ function drawField(mx, my, mrSq) {
     p.x += p.vx;
     p.y += p.vy;
 
-    // Vibrato + draw
-    const jx = p.x + (Math.random() - 0.5) * FIELD_JITTER;
-    const jy = p.y + (Math.random() - 0.5) * FIELD_JITTER;
-    const c = p.channel.color;
-    fill(c[0], c[1], c[2], FIELD_ALPHA);
+    // Vibrato + draw (jitter ramps up near the cursor)
+    const jx = p.x + (Math.random() - 0.5) * jitter;
+    const jy = p.y + (Math.random() - 0.5) * jitter;
+    fill(p.col[0], p.col[1], p.col[2], P.FIELD_ALPHA);
     circle(jx, jy, p.r * 2);
   }
 }
 
 function rebuildField() {
   const old = fieldParticles;
-  const spacing = max(4, floor(width / FIELD_COL_COUNT));
+  const spacing = max(4, floor(width / P.FIELD_COL_COUNT));
   const cols = floor(width / spacing);
   const rows = floor(height / spacing);
   const ox = (width - cols * spacing) / 2 + spacing / 2;
   const oy = (height - rows * spacing) / 2 + spacing / 2;
 
   const next = [];
+  const lookup = [];
   let k = 0;
   for (let c = 0; c < cols; c++) {
+    lookup[c] = [];
     for (let r = 0; r < rows; r++) {
       const hx = ox + c * spacing;
       const hy = oy + r * spacing;
@@ -139,8 +201,10 @@ function rebuildField() {
       const channelIdx = ((seed >>> 4) & 3);
       const sizeNoise = ((seed >>> 8) & 255) / 255;
       const baseR = FIELD_DOT_MIN + sizeNoise * (FIELD_DOT_MAX - FIELD_DOT_MIN);
+      const base = CHANNELS[channelIdx].color;
 
       const prev = old[k++];
+      lookup[c][r] = next.length;
       next.push({
         x: prev ? prev.x : hx,
         y: prev ? prev.y : hy,
@@ -150,10 +214,26 @@ function rebuildField() {
         homeY: hy,
         r: prev ? prev.r : baseR,
         baseR,
-        channel: CHANNELS[channelIdx],
+        base,
+        col: prev ? prev.col : [base[0], base[1], base[2]],
+        neighbors: [],
       });
     }
   }
+
+  // Wire each dot to its 4 grid neighbors (skipped letter cells leave gaps)
+  for (let c = 0; c < cols; c++) {
+    for (let r = 0; r < rows; r++) {
+      const idx = lookup[c][r];
+      if (idx === undefined) continue;
+      const nb = next[idx].neighbors;
+      if (c > 0 && lookup[c - 1][r] !== undefined) nb.push(lookup[c - 1][r]);
+      if (c < cols - 1 && lookup[c + 1][r] !== undefined) nb.push(lookup[c + 1][r]);
+      if (r > 0 && lookup[c][r - 1] !== undefined) nb.push(lookup[c][r - 1]);
+      if (r < rows - 1 && lookup[c][r + 1] !== undefined) nb.push(lookup[c][r + 1]);
+    }
+  }
+
   fieldParticles = next;
 }
 
@@ -187,4 +267,71 @@ function onTextChange(e) {
     currentText = newText;
     needsRebuild = true;
   }
+}
+
+// ─── On-page Dials ───────────────────────────────────────────
+
+function buildControls() {
+  const body = document.getElementById('panel-body');
+  const head = document.getElementById('panel-head');
+  if (!body || !head) return;
+
+  head.addEventListener('click', () => {
+    document.getElementById('panel').classList.toggle('collapsed');
+  });
+
+  CONTROLS.forEach(cfg => {
+    const row = document.createElement('div');
+    row.className = 'ctl';
+
+    const label = document.createElement('label');
+    label.className = 'ctl-label';
+    label.textContent = cfg.label;
+
+    const value = document.createElement('span');
+    value.className = 'ctl-value';
+    value.textContent = fmtVal(P[cfg.key], cfg.step);
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = cfg.min;
+    slider.max = cfg.max;
+    slider.step = cfg.step;
+    slider.value = P[cfg.key];
+    slider.addEventListener('input', () => {
+      P[cfg.key] = parseFloat(slider.value);
+      value.textContent = fmtVal(P[cfg.key], cfg.step);
+      if (cfg.rebuild) needsRebuild = true;
+    });
+
+    const labelRow = document.createElement('div');
+    labelRow.className = 'ctl-top';
+    labelRow.appendChild(label);
+    labelRow.appendChild(value);
+
+    row.appendChild(labelRow);
+    row.appendChild(slider);
+    body.appendChild(row);
+  });
+
+  const copy = document.createElement('button');
+  copy.id = 'panel-copy';
+  copy.textContent = 'Copy values';
+  copy.addEventListener('click', () => {
+    const lines = Object.keys(P).map(k => `  ${k}: ${P[k]},`).join('\n');
+    const text = `const P = {\n${lines}\n};`;
+    navigator.clipboard.writeText(text).then(() => {
+      copy.textContent = 'Copied!';
+      setTimeout(() => { copy.textContent = 'Copy values'; }, 1200);
+    }).catch(() => {
+      copy.textContent = 'Copy failed';
+      setTimeout(() => { copy.textContent = 'Copy values'; }, 1200);
+    });
+  });
+  body.appendChild(copy);
+}
+
+function fmtVal(v, step) {
+  const decimals = step >= 1 ? 0 : (step < 0.01 ? 3 : 2);
+  return v.toFixed(decimals);
 }
