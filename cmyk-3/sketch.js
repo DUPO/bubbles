@@ -8,6 +8,7 @@ const P = {
   MOTION_COUPLING: 0.24,
   COLOR_BLEED: 0.6,
   COLOR_RECOVER: 0.235,
+  COLOR_VARIETY: 1,
   ACTIVITY_SCALE: 3,
   FIELD_ALPHA: 225,
   FIELD_JITTER: 2.1,
@@ -26,6 +27,7 @@ const CONTROLS = [
   { key: 'MOTION_COUPLING', label: 'Motion coupling', min: 0,     max: 0.3, step: 0.01 },
   { key: 'COLOR_BLEED',     label: 'Color bleed',     min: 0,     max: 0.6, step: 0.01 },
   { key: 'COLOR_RECOVER',   label: 'Color recover',   min: 0.005, max: 0.3, step: 0.005 },
+  { key: 'COLOR_VARIETY',   label: 'Color variety',   min: 0,     max: 1,   step: 0.05, rebuild: true },
   { key: 'ACTIVITY_SCALE',  label: 'Activity thresh', min: 0.5,   max: 8,   step: 0.1 },
   { key: 'FIELD_ALPHA',     label: 'Dot opacity',     min: 30,    max: 255, step: 5 },
   { key: 'FIELD_JITTER',    label: 'Jitter (base)',   min: 0,     max: 4,   step: 0.1 },
@@ -174,6 +176,14 @@ function drawField(mx, my, mrSq, mvx, mvy) {
   }
 }
 
+// Integer hash with good avalanche — same (c,r) always maps to the same
+// value, but neighbors land far apart, so colors scatter without a pattern.
+function hashCell(c, r) {
+  let h = Math.imul(c, 374761393) + Math.imul(r, 668265263);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
 function rebuildField() {
   const old = fieldParticles;
   const spacing = max(4, floor(width / P.FIELD_COL_COUNT));
@@ -196,12 +206,22 @@ function rebuildField() {
       const py = constrain(floor(hy / height * (pg.height - 1)), 0, pg.height - 1);
       if (pg.pixels[(py * pg.width + px) * 4] > TEXT_BRIGHTNESS_THRESHOLD) continue;
 
-      // Deterministic per-cell channel + size so it's stable across rebuilds
-      const seed = (c * 73856093) ^ (r * 19349663);
-      const channelIdx = ((seed >>> 4) & 3);
-      const sizeNoise = ((seed >>> 8) & 255) / 255;
+      // Well-mixed per-cell hash → scattered channel/size with no visible pattern
+      const h = hashCell(c, r);
+      const channelIdx = h & 3;
+      const sizeNoise = ((h >>> 2) & 1023) / 1023;
       const baseR = FIELD_DOT_MIN + sizeNoise * (FIELD_DOT_MAX - FIELD_DOT_MIN);
-      const base = CHANNELS[channelIdx].color;
+
+      // Drift this dot's base color a random amount toward another channel,
+      // turning 4 pure colors into a continuum of in-between hues.
+      const src = CHANNELS[channelIdx].color;
+      const dst = CHANNELS[(channelIdx + 1 + ((h >>> 12) % 3)) & 3].color;
+      const t = ((h >>> 20) & 255) / 255 * P.COLOR_VARIETY;
+      const base = [
+        src[0] + (dst[0] - src[0]) * t,
+        src[1] + (dst[1] - src[1]) * t,
+        src[2] + (dst[2] - src[2]) * t,
+      ];
 
       const prev = old[k++];
       lookup[c][r] = next.length;
