@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bubbles — Wave (hand reveal)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="cam-overlay">
+    <div class="cam-card">
+      <button id="cam-btn">Enable camera</button>
+      <div id="cam-sub">Wave your hands to magnetically push the flowers aside and find yourself underneath. Only your hands move them.</div>
+    </div>
+  </div>
+
+  <div id="panel" class="hidden">
+    <div id="panel-head">wave · dials <span class="panel-hint">click to collapse</span></div>
+    <div id="panel-body"></div>
+  </div>
+  <div id="key-hint">press <b>Ctrl + H</b> for dials</div>
+
+  <script type="module">
+    // Hand tracking model — exposed to the classic sketch via window.MPVision
+    import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+    window.MPVision = { HandLandmarker, FilesetResolver };
+    window.dispatchEvent(new Event('mpvision-ready'));
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/p5.min.js"></script>
+  <script src="sketch.js"></script>
+</body>
+</html>
