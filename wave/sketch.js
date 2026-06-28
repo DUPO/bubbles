@@ -1,16 +1,18 @@
-// ─── Tunable parameters (on-page dials) ──────────────────────
-const P = {
-  PUSH_RADIUS: 300,      // how far a moving hand's magnetic field reaches
-  PUSH_STRENGTH: 20,     // how hard chips are shoved away from a hand
-  SPRING: 0.035,         // pull back to home (bounce-back)
-  DAMPING: 0.88,         // lower = bouncier
-  HAND_SMOOTH: 0.5,      // hand-position smoothing (lower = smoother/laggier)
-  MOTION_GAIN: 0.15,     // hand-speed → push factor (higher = less movement needed)
-  DEPTH_INFLUENCE: 1.45, // how much hand closeness scales the field (0 = ignore z)
-  JITTER: 2.2,           // constant per-chip vibrato (dots)
-  DOT_GAIN: 0.95,        // halftone ink coverage
-  FIELD_COL_COUNT: 180,  // chip resolution
+// ─── Per-mode presets (on-page dials edit the active one) ────
+// A = solid paper reveal · B = see-through dots over the live video
+const PRESETS = {
+  A: {
+    PUSH_RADIUS: 300, PUSH_STRENGTH: 20, SPRING: 0.035, DAMPING: 0.88,
+    HAND_SMOOTH: 0.5, MOTION_GAIN: 0.15, DEPTH_INFLUENCE: 1.45,
+    JITTER: 2.2, DOT_GAIN: 0.95, FIELD_COL_COUNT: 180,
+  },
+  B: {
+    PUSH_RADIUS: 300, PUSH_STRENGTH: 20, SPRING: 0.035, DAMPING: 0.88,
+    HAND_SMOOTH: 0.5, MOTION_GAIN: 0.15, DEPTH_INFLUENCE: 1.45,
+    JITTER: 2.2, DOT_GAIN: 1.05, FIELD_COL_COUNT: 180,
+  },
 };
+const P = Object.assign({}, PRESETS.A);   // live values for the active mode
 
 const CONTROLS = [
   { key: 'PUSH_RADIUS',     label: 'Hand reach',       min: 40,  max: 400, step: 5 },
@@ -33,7 +35,6 @@ const MP_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarke
 const PAPER = '#f5f0e8';
 const OFFSET_FRAC = 0.16;
 const DOT_MAX_FRAC = 0.62;
-const PAPER_OVER = 1;                  // px the paper tiles overlap, so no seams at rest
 const DEPTH_REF = 0.18;                // wrist→knuckle span (normalized) at a "neutral" distance
 const PALM_IDX = [0, 5, 9, 13, 17];   // landmarks averaged for a stable palm centre
 
@@ -52,11 +53,13 @@ for (let i = 0; i < CHANNELS.length; i++) {
 
 // ─── State ───────────────────────────────────────────────────
 let imgSource;
-let bloomStatic;           // offscreen: paper + halftone (the printed image)
-let topLayer;              // offscreen: printed image with chips moved + holes revealed
+let bloomStatic;           // offscreen: paper + halftone (shown before camera starts)
 let particles = [];        // one chip per grid cell
 let cols, rows, spacing, cellMaxR, offset, ox, oy;
 let needsRebuild = true;
+let mode = 'A';            // A = solid paper reveal · B = see-through dots over video
+let introActive = false;   // rain-in entrance
+const INTRO_GRAVITY = 0.9; // px/frame² while chips fall in
 
 // Camera + hand tracking
 let videoEl = null;
@@ -92,8 +95,8 @@ function draw() {
     drawVideoCover(drawingContext, videoEl, width, height);  // you, behind
     detectHands();
     updateChips();
-    renderChips();
-    image(topLayer, 0, 0);                                   // printed image, chips shoved aside
+    if (mode === 'A') renderModeA(drawingContext);           // solid print, windows punched
+    else renderModeB(drawingContext);                        // dots multiply straight onto you
   } else {
     image(bloomStatic, 0, 0);                                // flowers while waiting
   }
@@ -110,7 +113,38 @@ function onKey(e) {
     document.getElementById('panel').classList.toggle('hidden');
     const hint = document.getElementById('key-hint');
     if (hint) hint.style.display = 'none';
+  } else if (e.key === 'm' || e.key === 'M') {
+    setMode(mode === 'A' ? 'B' : 'A');
+  } else if (e.key === 'r' || e.key === 'R') {
+    if (camReady) startIntro();          // replay the rain-in
   }
+}
+
+// Send every chip above the top edge to fall (rain) into its home spot
+function startIntro() {
+  introActive = true;
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    p.x = p.homeX;
+    p.vx = 0;
+    p.vy = 0;
+    p.y = -random(spacing, height * 0.5) - spacing;   // staggered, above the top
+    p.release = frameCount + floor(random(0, 45));     // scattered start → continuous rain
+    p.landed = false;
+  }
+}
+
+// Switch mode + load that mode's preset into the live dials
+function setMode(m) {
+  if (m === mode) return;
+  const prevRes = P.FIELD_COL_COUNT;
+  mode = m;
+  Object.assign(P, PRESETS[m]);
+  if (P.FIELD_COL_COUNT !== prevRes) needsRebuild = true;
+  refreshControls();
+  document.querySelectorAll('#mode-toggle button').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
 }
 
 // ─── Camera + MediaPipe hand tracking ────────────────────────
@@ -156,6 +190,7 @@ function setupCameraOverlay() {
       }
 
       camReady = true;
+      startIntro();
       if (overlay) overlay.classList.add('gone');
     } catch (err) {
       btn.disabled = false;
@@ -231,8 +266,19 @@ function updateChips() {
     hands.push({ x: hp.x, y: hp.y, R, rSq: R * R, force: P.PUSH_STRENGTH * motion * depthScale });
   }
 
+  let allLanded = true;
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
+
+    // ── Rain-in: fall under gravity until reaching home, then hand off ──
+    if (!p.landed) {
+      allLanded = false;
+      if (frameCount < p.release) continue;               // still waiting above the top
+      p.vy += INTRO_GRAVITY;
+      p.y += p.vy;
+      if (p.y >= p.homeY) { p.landed = true; p.vy *= 0.35; }  // land with a small bounce
+      continue;                                            // no hand push while falling
+    }
 
     for (let h = 0; h < hands.length; h++) {
       const H = hands[h];
@@ -254,24 +300,30 @@ function updateChips() {
     p.x += p.vx;
     p.y += p.vy;
   }
+
+  if (introActive && allLanded) introActive = false;
 }
 
-// Paper (flat fill, carried by each chip) reveals webcam where chips left;
-// dots are real circles (jittered) on top — no box artifacts.
-function renderChips() {
-  const ctx = topLayer.drawingContext;
-  ctx.clearRect(0, 0, width, height);
-
-  // 1) Paper — a seamless cream field; gaps where chips were pushed show webcam
-  const ps = spacing + PAPER_OVER;
+// Mode A — solid print: opaque paper tiles (carried by each chip) cover you,
+// gaps where chips were pushed reveal the webcam; dots multiply on the paper.
+function renderModeA(ctx) {
+  const ps = spacing + 1;
   const phalf = ps / 2;
   ctx.fillStyle = PAPER;
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
     ctx.fillRect(p.x - phalf, p.y - phalf, ps, ps);
   }
+  drawDots(ctx);
+}
 
-  // 2) Dots — CMYK rosette circles, jittered, multiplied onto the paper
+// Mode B — see-through: no paper; dots multiply straight onto the live video.
+function renderModeB(ctx) {
+  drawDots(ctx);
+}
+
+// CMYK rosette circles, jittered, multiplied onto whatever is below
+function drawDots(ctx) {
   const J = P.JITTER;
   ctx.globalCompositeOperation = 'multiply';
   for (let i = 0; i < particles.length; i++) {
@@ -356,16 +408,13 @@ function buildPicture() {
         homeX: hx,
         homeY: hy,
         cmyk: ink,
+        landed: true,
+        release: 0,
       });
     }
   }
   bloomStatic.blendMode(BLEND);
   pg.remove();
-
-  if (topLayer) topLayer.remove();
-  topLayer = createGraphics(width, height);
-  topLayer.pixelDensity(1);
-  topLayer.noStroke();
 }
 
 // ─── On-page Dials ───────────────────────────────────────────
@@ -379,6 +428,12 @@ function buildControls() {
     document.getElementById('panel').classList.toggle('collapsed');
   });
 
+  // Bottom-right Solid / See-through toggle
+  document.querySelectorAll('#mode-toggle button').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+    b.addEventListener('click', () => setMode(b.dataset.mode));
+  });
+
   CONTROLS.forEach(cfg => {
     const row = document.createElement('div');
     row.className = 'ctl';
@@ -389,10 +444,12 @@ function buildControls() {
 
     const value = document.createElement('span');
     value.className = 'ctl-value';
+    value.id = 'val-' + cfg.key;
     value.textContent = fmtVal(P[cfg.key], cfg.step);
 
     const slider = document.createElement('input');
     slider.type = 'range';
+    slider.id = 'ctl-' + cfg.key;
     slider.min = cfg.min;
     slider.max = cfg.max;
     slider.step = cfg.step;
@@ -428,6 +485,16 @@ function buildControls() {
     });
   });
   body.appendChild(copy);
+}
+
+// Sync the sliders to the current P (after a mode/preset switch)
+function refreshControls() {
+  CONTROLS.forEach(cfg => {
+    const s = document.getElementById('ctl-' + cfg.key);
+    const v = document.getElementById('val-' + cfg.key);
+    if (s) s.value = P[cfg.key];
+    if (v) v.textContent = fmtVal(P[cfg.key], cfg.step);
+  });
 }
 
 function fmtVal(v, step) {
