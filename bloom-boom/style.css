@@ -34,8 +34,6 @@ canvas { display: block; }
   padding: 8px;
 }
 
-.mic-emoji { font-size: 44px; margin-bottom: 18px; }
-
 #mic-btn {
   font-family: inherit;
   font-size: 15px;
@@ -165,6 +163,18 @@ canvas { display: block; }
 }
 
 #panel-copy:hover { background: rgba(255, 255, 255, 0.18); }
+
+#audio-meter {
+  margin-bottom: 12px;
+  padding: 8px 9px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-line;
+  color: #9fe6c4;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+}
 
 /* Subtle "press Ctrl+H" hint — fades out shortly after load */
 #key-hint {
