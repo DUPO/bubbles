@@ -165,7 +165,7 @@ canvas { display: block; }
 #panel-copy:hover { background: rgba(255, 255, 255, 0.18); }
 
 #audio-meter {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   padding: 8px 9px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
@@ -175,6 +175,23 @@ canvas { display: block; }
   background: rgba(0, 0, 0, 0.35);
   border-radius: 6px;
 }
+
+#panel-recal {
+  width: 100%;
+  margin-bottom: 14px;
+  padding: 7px;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #f5f0e8;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+#panel-recal:hover { background: rgba(255, 255, 255, 0.16); }
 
 /* Subtle "press Ctrl+H" hint — fades out shortly after load */
 #key-hint {

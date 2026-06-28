@@ -1,7 +1,7 @@
 // ─── Tunable parameters (exposed as on-page dials) ───────────
 const P = {
   // Voice → spectrum / size
-  SENSITIVITY: 3.4,      // gain on per-column band energy (tone)
+  SENSITIVITY: 2.3,      // gain on per-column band energy (tone)
   BAND_SMOOTH: 0.18,     // attack/decay of per-column level
   NOISE_GATE: 0,         // subtract this floor from vol/tone (kills mic hiss)
   VOLUME_SIZE: 2.4,      // how much overall loudness (RMS) grows ALL dots
@@ -86,6 +86,16 @@ let colBin = [];            // FFT bin index per grid column
 let volume = 0;             // smoothed overall loudness (0..1)
 let balance = 0;            // smoothed L/R balance (-1 left … +1 right)
 
+// Auto-calibrated noise floor (per FFT bin + overall RMS) — measured on enable
+let binFloor = null;        // Float array, length = frequencyBinCount
+let volFloor = 0;
+let calibrating = false;
+let calibUntil = 0;         // frameCount at which calibration ends
+let calibMaxBin = null;     // running max per bin during calibration
+let calibMaxRms = 0;
+const CALIB_FRAMES = 60;    // ~1s at 60fps
+const FLOOR_MARGIN = 1.05;  // gate just above worst-case measured noise
+
 // ─── p5.js Lifecycle ─────────────────────────────────────────
 
 function preload() {
@@ -166,6 +176,8 @@ function setupMicOverlay() {
       analyser = node;
       freqData = new Uint8Array(node.frequencyBinCount);
       timeData = new Uint8Array(node.fftSize);
+      binFloor = new Float32Array(node.frequencyBinCount);
+      calibMaxBin = new Float32Array(node.frequencyBinCount);
 
       // True stereo only if the device really gives 2 channels
       const settings = stream.getAudioTracks()[0].getSettings();
@@ -181,7 +193,7 @@ function setupMicOverlay() {
         timeR = new Uint8Array(analyserR.fftSize);
       }
 
-      if (overlay) overlay.classList.add('gone');
+      startCalibration();
     } catch (err) {
       btn.disabled = false;
       btn.textContent = 'Mic blocked';
@@ -189,6 +201,27 @@ function setupMicOverlay() {
       if (sub) sub.textContent = 'No microphone access — enable it and reload to play.';
     }
   });
+}
+
+// Measure ~1s of room tone, then subtract it forever after.
+function startCalibration() {
+  if (!analyser) return;
+  calibrating = true;
+  calibUntil = frameCount + CALIB_FRAMES;
+  calibMaxRms = 0;
+  calibMaxBin.fill(0);
+  const sub = document.getElementById('mic-sub');
+  if (sub) sub.textContent = 'Measuring room tone — stay quiet…';
+  const overlay = document.getElementById('mic-overlay');
+  if (overlay) overlay.classList.remove('gone');   // show during (re)calibration
+}
+
+function finishCalibration() {
+  for (let i = 0; i < binFloor.length; i++) binFloor[i] = calibMaxBin[i] * FLOOR_MARGIN;
+  volFloor = calibMaxRms * FLOOR_MARGIN;
+  calibrating = false;
+  const overlay = document.getElementById('mic-overlay');
+  if (overlay) overlay.classList.add('gone');
 }
 
 function rms(buf) {
@@ -203,18 +236,33 @@ function rms(buf) {
 function updateAudio() {
   if (!analyser) return;
   analyser.getByteFrequencyData(freqData);
+  analyser.getByteTimeDomainData(timeData);
+  const curRms = rms(timeData);
 
-  // Per-column band (tone) from the frequency bins
+  // ── Calibration: record the worst-case noise, hold the image still ──
+  if (calibrating) {
+    for (let i = 0; i < freqData.length; i++) {
+      const v = freqData[i] / 255;
+      if (v > calibMaxBin[i]) calibMaxBin[i] = v;
+    }
+    if (curRms > calibMaxRms) calibMaxRms = curRms;
+    volume += (0 - volume) * 0.3;        // ease everything to rest
+    for (let c = 0; c < cols; c++) band[c] += (0 - band[c]) * 0.3;
+    if (frameCount >= calibUntil) finishCalibration();
+    return;
+  }
+
+  // ── Per-column band (tone), gated by the calibrated per-bin floor ──
   const s = P.BAND_SMOOTH;
   for (let c = 0; c < cols; c++) {
-    const raw = (freqData[colBin[c]] || 0) / 255;
+    const bin = colBin[c];
+    const floor = binFloor ? binFloor[bin] : 0;
+    const raw = Math.max(0, (freqData[bin] || 0) / 255 - floor);
     band[c] += (raw - band[c]) * s;
   }
 
-  // Overall loudness from the raw waveform (RMS) — tracks how loud you are
-  // regardless of where in the spectrum the energy sits.
-  analyser.getByteTimeDomainData(timeData);
-  volume += (rms(timeData) - volume) * s;
+  // ── Overall loudness (RMS), gated by the calibrated volume floor ──
+  volume += (Math.max(0, curRms - volFloor) - volume) * s;
 
   // Stereo balance from per-channel time-domain RMS
   if (stereoActive) {
@@ -232,6 +280,7 @@ function updateMeter() {
   const m = document.getElementById('audio-meter');
   if (!m) return;
   if (!analyser) { m.textContent = 'mic off'; return; }
+  if (calibrating) { m.textContent = 'calibrating… stay quiet'; return; }
   const q = Math.max(1, Math.floor(cols * 0.25));
   let lo = 0, hi = 0;
   for (let i = 0; i < q; i++) lo += band[i];
@@ -436,6 +485,12 @@ function buildControls() {
   meter.id = 'audio-meter';
   meter.textContent = 'enable mic to see levels';
   body.appendChild(meter);
+
+  const recal = document.createElement('button');
+  recal.id = 'panel-recal';
+  recal.textContent = 'Recalibrate mic';
+  recal.addEventListener('click', () => { if (analyser) startCalibration(); });
+  body.appendChild(recal);
 
   CONTROLS.forEach(cfg => {
     const row = document.createElement('div');
