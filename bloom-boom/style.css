@@ -1,0 +1,191 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #f5f0e8;
+}
+
+canvas { display: block; }
+
+/* ── Mic enable overlay ────────────────────────────── */
+#mic-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 18, 16, 0.55);
+  backdrop-filter: blur(10px);
+  transition: opacity 0.5s ease;
+}
+
+#mic-overlay.gone {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mic-card {
+  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #f5f0e8;
+  padding: 8px;
+}
+
+.mic-emoji { font-size: 44px; margin-bottom: 18px; }
+
+#mic-btn {
+  font-family: inherit;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  color: #1a1a1a;
+  background: #f5f0e8;
+  border: none;
+  border-radius: 999px;
+  padding: 13px 30px;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+#mic-btn:hover { transform: scale(1.04); }
+#mic-btn:disabled { opacity: 0.6; cursor: default; transform: none; }
+
+#mic-sub {
+  margin-top: 16px;
+  font-size: 12px;
+  opacity: 0.6;
+  max-width: 280px;
+}
+
+/* ── Control panel ─────────────────────────────────── */
+#panel {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 20;
+  width: 230px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #f5f0e8;
+  background: rgba(20, 20, 20, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+  user-select: none;
+}
+
+#panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 14px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#panel-head .panel-hint {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  opacity: 0.4;
+  text-transform: none;
+}
+
+#panel.collapsed #panel-body { display: none; }
+#panel.collapsed #panel-head { border-bottom: none; }
+#panel.hidden { display: none; }
+
+#panel-body {
+  padding: 12px 14px 14px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.ctl { margin-bottom: 11px; }
+.ctl:last-child { margin-bottom: 0; }
+
+.ctl-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.ctl-label { font-size: 11px; opacity: 0.75; }
+.ctl-value { font-size: 11px; font-variant-numeric: tabular-nums; opacity: 0.95; }
+
+.ctl input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  outline: none;
+  cursor: pointer;
+}
+
+.ctl input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #f5f0e8;
+  cursor: pointer;
+}
+
+.ctl input[type="range"]::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: none;
+  border-radius: 50%;
+  background: #f5f0e8;
+  cursor: pointer;
+}
+
+#panel-copy {
+  width: 100%;
+  margin-top: 14px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: #f5f0e8;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+#panel-copy:hover { background: rgba(255, 255, 255, 0.18); }
+
+/* Subtle "press Ctrl+H" hint — fades out shortly after load */
+#key-hint {
+  position: fixed;
+  bottom: 16px;
+  right: 18px;
+  z-index: 20;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: rgba(20, 20, 20, 0.5);
+  background: rgba(245, 240, 232, 0.55);
+  padding: 5px 10px;
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  animation: hintFade 1s ease 5s forwards;
+}
+
+#key-hint b { font-weight: 700; color: rgba(20, 20, 20, 0.75); }
+
+@keyframes hintFade {
+  to { opacity: 0; }
+}

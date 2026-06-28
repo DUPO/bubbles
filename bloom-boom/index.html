@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bubbles — Bloom Boom (voice)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="mic-overlay">
+    <div class="mic-card">
+      <div class="mic-emoji">🎤</div>
+      <button id="mic-btn">Enable microphone</button>
+      <div id="mic-sub">Your voice disturbs the image — pitch sweeps left → right.</div>
+    </div>
+  </div>
+
+  <div id="panel" class="hidden">
+    <div id="panel-head">bloom-boom · dials <span class="panel-hint">click to collapse</span></div>
+    <div id="panel-body"></div>
+  </div>
+  <div id="key-hint">press <b>Ctrl + H</b> for dials</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/p5.min.js"></script>
+  <script src="sketch.js"></script>
+</body>
+</html>
